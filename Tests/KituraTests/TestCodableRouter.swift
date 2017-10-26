@@ -32,6 +32,8 @@ class TestCodableRouter: KituraTest {
             ("testBasicSingleDelete", testBasicSingleDelete),
             ("testBasicPut", testBasicPut),
             ("testBasicPatch", testBasicPatch),
+            ("testJoinPath", testJoinPath),
+            ("testRouteWithTrailingSlash", testRouteWithTrailingSlash),
             ("testRouteParameters", testRouteParameters),
             ("testCodablePutBodyParsing", testCodablePutBodyParsing),
             ("testCodablePatchBodyParsing", testCodablePatchBodyParsing),
@@ -414,6 +416,33 @@ class TestCodableRouter: KituraTest {
         }
     }
 
+    func testJoinPath() {
+        let router = Router()
+        XCTAssertEqual(router.join(path: "a", with: "b"), "a/b")
+        XCTAssertEqual(router.join(path: "a/", with: "/b"), "a/b")
+        XCTAssertEqual(router.join(path: "a", with: "/b"), "a/b")
+        XCTAssertEqual(router.join(path: "a/", with: "b"), "a/b")
+    }
+
+    func testRouteWithTrailingSlash() {
+        router.get("/users/") { (id: Int, respondWith: (User?, RequestError?) -> Void) in
+            // Returning an error that's not .notFound so we know this route has been hit
+            respondWith(nil, .conflict)
+        }
+        performServerTest(router, timeout: 30) { expectation in
+            self.performRequest("get", path: "/users/1", callback: { response in
+                guard let response = response else {
+                    XCTFail("ERROR!!! ClientRequest response object was nil")
+                    return
+                }
+
+                XCTAssertEqual(response.statusCode, HTTPStatusCode.conflict, "Expected the '/users' route to be executed even though we passed '/users/'")
+
+                expectation.fulfill()
+            })
+        }
+    }
+
     func testRouteParameters() {
         //Add this erroneous route which should not be hit by the test, should log an error but we can't test the log so we checkout for a 404 not found.
         router.get("/users/:id") { (id: Int, respondWith: (User?, RequestError?) -> Void) in
@@ -423,7 +452,6 @@ class TestCodableRouter: KituraTest {
         }
 
         performServerTest(router, timeout: 30) { expectation in
-
             self.performRequest("get", path: "/users/1", callback: { response in
                 guard let response = response else {
                     XCTFail("ERROR!!! ClientRequest response object was nil")
