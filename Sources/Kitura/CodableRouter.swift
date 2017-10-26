@@ -62,6 +62,12 @@ extension Router {
     public typealias CodableResultClosure<O: Codable> = (O?, RequestError?) -> Void
     
     /**
+     The `IdentifierCodableResultClosure` takes an object conforming to `Identifier`, an object conforming to `Codable`, and a `RequestError?` as parameters.
+     The `IdentifierCodableResultClosure` is used by some of the other Codable closures.
+     */
+    public typealias IdentifierCodableResultClosure<Id: Identifier, O: Codable> = (Id?, O?, RequestError?) -> Void
+
+    /**
      The `CodableArrayResultClosure` takes an object conforming to `Codable` and a `RequestError?` as parameters.
      The `CodableArrayResultClosure` is used by a some of the other Codable closures.
      */
@@ -128,6 +134,35 @@ extension Router {
     public typealias CodableClosure<I: Codable, O: Codable> = (I, @escaping CodableResultClosure<O>) -> Void
     
     /**
+     The `CodableIdentifierClosure` takes an object conforming to `Codable` and a closure of type `IdentifierCodableResultClosure` as parameters.
+     
+     ### Usage Example: ###
+     ````
+     public struct User: Codable {
+        ...
+     }
+     
+     router.post("/users") { (user: User, respondWith: (Int?, User?, RequestError?) -> Void) in
+    
+        if databaseConnectionIsOk {
+     
+            ...
+            //If no errors occured and you have a User and the corresponding identifier, you can just respond with the identifier and user, and pass nil as the 'RequestError?' value.
+            respondWith(id, user, nil)
+     
+        } else {
+     
+            ...
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error and passing nil for Int? and nil for User?.
+            respondWith(nil, nil, .internalServerError)
+        }
+     }
+     ````
+    */
+    public typealias CodableIdentifierClosure<I: Codable, Id: Identifier, O: Codable> = (I, @escaping IdentifierCodableResultClosure<Id, O>) -> Void
+    
+    /**
      The `NonCodableClosure` a closure of type `CodableResultClosure` as a parameter.
      
      ### Usage Example: ###
@@ -151,7 +186,7 @@ extension Router {
      ````
     */
     public typealias NonCodableClosure = (@escaping ResultClosure) -> Void
-    
+
     /**
      The `IdentifierNonCodableClosure` takes an object conforming to `Identifier` and a closure of type `ResultClosure` as parameters.
      
@@ -316,8 +351,9 @@ extension Router {
     }
     
     /**
-     Setup a CodableClosure on the provided route which will be invoked when a request comes to the server.
-     
+     Setup a CodableClosure on the provided route which will be invoked when a POST request comes to the server.
+     In this scenario, the ID (i.e. unique identifier) is a field in the Codable instance.
+          
      ### Usage Example: ###
      ````
      //User is a struct object that conforms to Codable
@@ -333,6 +369,28 @@ extension Router {
     */
     public func post<I: Codable, O: Codable>(_ route: String, handler: @escaping CodableClosure<I, O>) {
         postSafely(route, handler: handler)
+    }
+    
+    /**
+     Setup a CodableIdentifierClosure on the provided route which will be invoked when a POST request comes to the server.
+     In this scenario, the ID (i.e. unique identifier) for the Codable instance is a separate field (which is sent back to the client
+     in the location HTTP header).
+          
+     ### Usage Example: ###
+     ````
+     //User is a struct object that conforms to Codable
+     router.post("/users") { (user: User, respondWith: (Int?, User?, RequestError?) -> Void) in
+          
+        ...
+     
+        respondWith(id, user, nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: A Codable closure that gets invoked when a request comes to the server.
+    */
+    public func post<I: Codable, Id: Identifier, O: Codable>(_ route: String, handler: @escaping CodableIdentifierClosure<I, Id, O>) {
+        postSafelyWithId(route, handler: handler)
     }
 
     /**
@@ -416,6 +474,58 @@ extension Router {
             } catch {
                 // Http 400 error
                 //response.status(.badRequest)
+                // Http 422 error
+                response.status(.unprocessableEntity)
+                next()
+            }
+        }
+    }
+    
+    // POST
+    fileprivate func postSafelyWithId<I: Codable, Id: Identifier, O: Codable>(_ route: String, handler: @escaping CodableIdentifierClosure<I, Id, O>) {
+        post(route) { request, response, next in
+            Log.verbose("Received POST type-safe request")
+            guard self.isContentTypeJson(request) else {
+                response.status(.unsupportedMediaType)
+                next()
+                return
+            }
+            guard !request.hasBodyParserBeenUsed else {
+                Log.error("No data in request. Codable routes do not allow the use of a BodyParser.")
+                response.status(.internalServerError)
+                return
+            }
+            do {
+                // Process incoming data from client
+                let param = try request.read(as: I.self)
+                
+                // Define handler to process result from application
+                let resultHandler: IdentifierCodableResultClosure<Id, O> = { id, result, error in
+                    do {
+                        if let err = error {
+                            let status = self.httpStatusCode(from: err)
+                            response.status(status)
+                        } else {
+                            guard let id = id else {
+                                Log.error("No id (unique identifier) value provided.")
+                                response.status(.internalServerError)
+                                next()
+                                return
+                            }                            
+                            let encoded = try JSONEncoder().encode(result)
+                            response.status(.created)
+                            response.headers["Location"] = String(id.value)
+                            response.send(data: encoded)
+                        }
+                    } catch {
+                        // Http 500 error
+                        response.status(.internalServerError)
+                    }
+                    next()
+                }
+                // Invoke application handler
+                handler(param, resultHandler)
+            } catch {
                 // Http 422 error
                 response.status(.unprocessableEntity)
                 next()
