@@ -26,52 +26,10 @@ extension Router {
     // MARK: Codable Type Aliases
     
     /**
-     The `ResultClosure` takes an optional RequestError as a parameter.
-     
-     ### Usage Example: ###
-     ````
-     public struct User: Codable {
-        ...
-     }
-     
-     router.delete("/users") { (id: Int, respondWith: (RequestError?) -> Void) in
-
-        if databaseConnectionIsOk {
-     
-            ...
-     
-            //If everything works as intended you can pass nil to avoid using an error.
-            respondWith(nil)
-     
-        } else {
-     
-            ...
-     
-            //If there has been an error you can use the respondWith call to respond with an appropiate error.
-            respondWith(.internalServerError)
-        }
-     }
-     ````
-    */
-    public typealias ResultClosure = (RequestError?) -> Void
-    
-    /**
-     The `CodableResultClosure` takes an object conforming to `Codable` and a `RequestError?` as parameters.
-     The `CodableResultClosure` is used by some of the other Codable closures.
-     */
-    public typealias CodableResultClosure<O: Codable> = (O?, RequestError?) -> Void
-    
-    /**
      The `IdentifierCodableResultClosure` takes an object conforming to `Identifier`, an object conforming to `Codable`, and a `RequestError?` as parameters.
      The `IdentifierCodableResultClosure` is used by some of the other Codable closures.
      */
     public typealias IdentifierCodableResultClosure<Id: Identifier, O: Codable> = (Id?, O?, RequestError?) -> Void
-
-    /**
-     The `CodableArrayResultClosure` takes an object conforming to `Codable` and a `RequestError?` as parameters.
-     The `CodableArrayResultClosure` is used by a some of the other Codable closures.
-     */
-    public typealias CodableArrayResultClosure<O: Codable> = ([O]?, RequestError?) -> Void
     
     /**
      The `IdentifierCodableClosure` takes an object conforming to `Identifier`, an object conforming to `Codable` and a closure of type `CodableResultClosure` as parameters.
