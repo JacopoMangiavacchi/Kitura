@@ -22,55 +22,358 @@ import KituraNet
 import KituraContracts
 
 // Codable router
-// Note: If an exception is thrown from a handler and is bubbled up to the framework,
-// Kitura by default returns a notFound error.
-// A few references on errors
-// https://stackoverflow.com/questions/9381520/what-is-the-appropriate-http-status-code-response-for-a-general-unsuccessful-req
-// https://stackoverflow.com/questions/3290182/rest-http-status-codes-for-failed-validation-or-invalid-duplicate
-// https://restfulapi.net/http-status-codes/
-// https://docs.oracle.com/en/cloud/iaas/messaging-cloud/csmes/rest-api-http-status-codes-and-error-messages-reference.html#GUID-AAB1EE32-BE4A-4ACC-BEAC-ABA85EB41919
+
 extension Router {
+    
+    // MARK: Codable Type Aliases
+    
+    /**
+     The `ResultClosure` takes an optional RequestError as a parameter.
+     
+     ### Usage Example: ###
+     ````
+     public struct User: Codable {
+        ...
+     }
+     
+     router.delete("/users") { (id: Int, respondWith: (RequestError?) -> Void) in
+
+        if databaseConnectionIsOk {
+     
+            ...
+     
+            //If everything works as intended you can pass nil to avoid using an error.
+            respondWith(nil)
+     
+        } else {
+     
+            ...
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error.
+            respondWith(.internalServerError)
+        }
+     }
+     ````
+    */
     public typealias ResultClosure = (RequestError?) -> Void
+    
+    /**
+     The `CodableResultClosure` takes an object conforming to `Codable` and a `RequestError?` as parameters.
+     The `CodableResultClosure` is used by some of the other Codable closures.
+     */
     public typealias CodableResultClosure<O: Codable> = (O?, RequestError?) -> Void
+    
+    /**
+     The `CodableArrayResultClosure` takes an object conforming to `Codable` and a `RequestError?` as parameters.
+     The `CodableArrayResultClosure` is used by a some of the other Codable closures.
+     */
     public typealias CodableArrayResultClosure<O: Codable> = ([O]?, RequestError?) -> Void
+    
+    /**
+     The `IdentifierCodableClosure` takes an object conforming to `Identifier`, an object conforming to `Codable` and a closure of type `CodableResultClosure` as parameters.
+     
+     ### Usage Example: ###
+     ````
+     public struct User: Codable {
+        ...
+     }
+     
+     var userStore: [Int, User] = [...]
+     
+     //By default `Int` has conformity to Identifier
+     router.put("/users") { (id: Int, user: User, respondWith: (User?, RequestError?) -> Void) in
+     
+        guard let oldUser = self.userStore[id] else {
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error and passing nil for the User?.
+            respondWith(nil, .notFound)
+     
+            return
+        }
+     
+        ...
+     
+        //If no errors occured and you have a User you can just respond with the user by passing nil as the 'RequestError?' value.
+        respondWith(user, nil)
+     }
+     ````
+    */
     public typealias IdentifierCodableClosure<Id: Identifier, I: Codable, O: Codable> = (Id, I, @escaping CodableResultClosure<O>) -> Void
+    
+    /**
+     The `CodableClosure` takes an object conforming to `Codable` and a closure of type `CodableResultClosure` as parameters.
+     
+     ### Usage Example: ###
+     ````
+     public struct User: Codable {
+        ...
+     }
+     
+     router.post("/users") { (user: User, respondWith: (User?, RequestError?) -> Void) in
+    
+        if databaseConnectionIsOk {
+     
+            ...
+            //If no errors occured and you have a User you can just respond with the user by passing nil as the 'RequestError?' value.
+            respondWith(user, nil)
+     
+        } else {
+     
+            ...
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error and passing nil for the User?.
+            respondWith(nil, .internalServerError)
+        }
+     }
+     ````
+    */
     public typealias CodableClosure<I: Codable, O: Codable> = (I, @escaping CodableResultClosure<O>) -> Void
+    
+    /**
+     The `NonCodableClosure` a closure of type `CodableResultClosure` as a parameter.
+     
+     ### Usage Example: ###
+     ````
+     router.delete("/users") { (respondWith: (RequestError?) -> Void) in
+     
+         if databaseConnectionIsOk {
+     
+            ...
+            //If no errors occured you can just pass nil as the 'RequestError?' value.
+            respondWith(nil)
+     
+         } else {
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error.
+            respondWith(.internalServerError)
+     
+            ...
+         }
+     }
+     ````
+    */
     public typealias NonCodableClosure = (@escaping ResultClosure) -> Void
+    
+    /**
+     The `IdentifierNonCodableClosure` takes an object conforming to `Identifier` and a closure of type `ResultClosure` as parameters.
+     
+     ### Usage Example: ###
+     ````
+     router.delete("/users") { (id: Int, respondWith: (RequestError?) -> Void) in
+     
+        if databaseConnectionIsOk {
+     
+            ...
+     
+            //If no errors occured you can just pass nil as the 'RequestError?' value.
+            respondWith(nil)
+     
+        } else {
+     
+            ...
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error.
+            respondWith(.internalServerError)
+        }
+     }
+     ````
+    */
     public typealias IdentifierNonCodableClosure<Id: Identifier> = (Id, @escaping ResultClosure) -> Void
+    
+    /**
+     
+     The `CodableArrayClosure` takes a closure of type `CodableArrayResultClosure` as a parameter.
+     
+     ### Usage Example: ###
+     ````
+     router.get("/users") { (respondWith: ([User]?, RequestError?) -> Void) in
+     
+        if databaseConnectionIsOk {
+     
+            ...
+     
+            //If no errors occured and you have an array of Users you can just respond with the users by passing nil as the 'RequestError?' value.
+            respondWith(users, nil)
+     
+        } else {
+     
+            ...
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error and passing nil for the [User]?.
+            respondWith(nil, .internalServerError)
+        }
+     }
+     ````
+    */
     public typealias CodableArrayClosure<O: Codable> = (@escaping CodableArrayResultClosure<O>) -> Void
+    
+    /**
+     The `IdentifierSimpleCodableClosure` takes an object conforming to `Identifier` and a closure of type `CodableResultClosure` as parameters.
+     
+     ### Usage Example: ###
+     ````
+     public struct User: Codable {
+        ...
+     }
+     
+     var userStore: [Int, User] = (...)
+     
+     router.get("/users") { (id: Int, respondWith: (User?, RequestError?) -> Void) in
+     
+        guard let user = self.userStore[id] else {
+     
+            //If there has been an error you can use the respondWith call to respond with an appropiate error and passing nil for the User?.
+            respondWith(nil, .notFound)
+     
+            return
+        }
+     
+        ...
+     
+        //If no errors occured and you have a User you can just respond with the user by passing nil as the 'RequestError?' value.
+        respondWith(user, nil)
+     }
+     ````
+    */
     public typealias IdentifierSimpleCodableClosure<Id: Identifier, O: Codable> = (Id, @escaping CodableResultClosure<O>) -> Void
     
-    // GET
+    // MARK: Codable Routing
+    
+    /**
+     Setup a CodableArrayClosure on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     //User is a struct object that conforms to Codable
+     router.get("/users") { (respondWith: ([User]?, RequestError?) -> Void) in
+     
+        ...
+
+        respondWith(users, nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: A CodableArrayClosure that gets invoked when a request comes to the server.
+     */
     public func get<O: Codable>(_ route: String, handler: @escaping CodableArrayClosure<O>) {
         getSafely(route, handler: handler)
     }
 
-    // GET single element
+    /**
+     Setup a IdentifierSimpleCodableClosure on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     //User is a struct object that conforms to Codable
+     router.get("/users") { (id: Int, respondWith: (User?, RequestError?) -> Void) in
+     
+        ...
+     
+        respondWith(user, nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: An IdentifierSimpleCodableClosure that gets invoked when a request comes to the server.
+     */
     public func get<Id: Identifier, O: Codable>(_ route: String, handler: @escaping IdentifierSimpleCodableClosure<Id, O>) {
         getSafely(route, handler: handler)
     }
 
-    // DELETE
+    /**
+     Setup a NonCodableClosure on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     router.delete("/users") { (respondWith: (RequestError?) -> Void) in
+     
+        ...
+     
+        respondWith(nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: An NonCodableClosure that gets invoked when a request comes to the server.
+     */
     public func delete(_ route: String, handler: @escaping NonCodableClosure) {
         deleteSafely(route, handler: handler)
     }
 
-    // DELETE single element
+    /**
+     Setup a IdentifierNonCodableClosure on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     router.delete("/users") { (id: Int, respondWith: (RequestError?) -> Void) in
+     
+        ...
+     
+        respondWith(nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: An IdentifierNonCodableClosure that gets invoked when a request comes to the server.
+     */
     public func delete<Id: Identifier>(_ route: String, handler: @escaping IdentifierNonCodableClosure<Id>) {
         deleteSafely(route, handler: handler)
     }
-
-    // POST
+    
+    /**
+     Setup a CodableClosure on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     //User is a struct object that conforms to Codable
+     router.post("/users") { (user: User, respondWith: (User?, RequestError?) -> Void) in
+     
+        ...
+     
+        respondWith(user, nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: A Codable closure that gets invoked when a request comes to the server.
+    */
     public func post<I: Codable, O: Codable>(_ route: String, handler: @escaping CodableClosure<I, O>) {
         postSafely(route, handler: handler)
     }
 
-    // PUT with Identifier
+    /**
+     Setup a IdentifierCodableClosure on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     //User is a struct object that conforms to Codable
+     router.put("/users") { (id: Int, user: User, respondWith: (User?, RequestError?) -> Void) in
+     
+        ...
+     
+        respondWith(user, nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: An Identifier Codable closure that gets invoked when a request comes to the server.
+     */
     public func put<Id: Identifier, I: Codable, O: Codable>(_ route: String, handler: @escaping IdentifierCodableClosure<Id, I, O>) {
         putSafely(route, handler: handler)
     }
 
-    // PATCH
+    /**
+     Setup a IdentifierCodableClosure on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     //User is a struct object that conforms to Codable
+     //OptionalUser is a struct object that conforms to Codable where all properties are optional
+     router.patch("/users") { (id: Int, patchUser: OptionalUser, respondWith: (User?, RequestError?) -> Void) -> Void in
+     
+        ...
+     
+        respondWith(user, nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: An Identifier Codable closure that gets invoked when a request comes to the server.
+     */
     public func patch<Id: Identifier, I: Codable, O: Codable>(_ route: String, handler: @escaping IdentifierCodableClosure<Id, I, O>) {
         patchSafely(route, handler: handler)
     }

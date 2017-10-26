@@ -162,7 +162,6 @@ class TestCodableRouter: KituraTest {
             print("GET on /users")
             guard let user = self.userStore[id] else {
                 XCTFail("ERROR!!! Couldn't find user with id \(id)")
-                //TODO: Create error instance
                 respondWith(nil, .notFound)
                 return
             }

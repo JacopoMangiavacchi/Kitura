@@ -266,9 +266,11 @@ public class Router {
     }
 }
 
-// MARK: RouterMiddleware extensions
+
 extension Router : RouterMiddleware {
 
+    // MARK: RouterMiddleware extensions
+    
     /// Handle an HTTP request as a middleware. Used for sub routing.
     ///
     /// - Parameter request: The `RouterRequest` object that is used to work with
