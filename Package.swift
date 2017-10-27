@@ -21,7 +21,6 @@ import PackageDescription
 
 let package = Package(
     name: "Kitura",
-//    exclude: ["Configuration", "Scripts"],
     products: [
         // Products define the executables and libraries produced by a package, and make them visible to other packages.
         .library(
