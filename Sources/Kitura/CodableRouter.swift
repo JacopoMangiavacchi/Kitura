@@ -66,6 +66,26 @@ extension Router {
     }
 
     /**
+     Setup a CodableClosureNoIdentifier on the provided route which will be invoked when a request comes to the server.
+     
+     ### Usage Example: ###
+     ````
+     //User is a struct object that conforms to Codable
+     router.get("/custom") { (respondWith: (User?, RequestError?) -> Void) in
+     
+     ...
+     
+     respondWith(user, nil)
+     }
+     ````
+     - Parameter route: A String specifying the pattern that needs to be matched, in order for the handler to be invoked.
+     - Parameter handler: A CodableClosureNoIdentifier that gets invoked when a request comes to the server.
+     */
+    public func get<O: Codable>(_ route: String, handler: @escaping CodableClosureNoIdentifier<O>) {
+        getSafely(route, handler: handler)
+    }
+
+    /**
      Setup a NonCodableClosure on the provided route which will be invoked when a request comes to the server.
      
      ### Usage Example: ###
@@ -443,6 +463,31 @@ extension Router {
                 response.status(.unprocessableEntity)
                 next()
             }
+        }
+    }
+
+    // Get single custom
+    fileprivate func getSafely<O: Codable>(_ route: String, handler: @escaping CodableClosureNoIdentifier<O>) {
+        get(route) { request, response, next in
+            Log.verbose("Received GET type-safe request")
+            // Define result handler
+            let resultHandler: CodableResultClosure<O> = { result, error in
+                do {
+                    if let err = error {
+                        let status = self.httpStatusCode(from: err)
+                        response.status(status)
+                    } else {
+                        let encoded = try JSONEncoder().encode(result)
+                        response.status(.OK)
+                        response.send(data: encoded)
+                    }
+                } catch {
+                    // Http 500 error
+                    response.status(.internalServerError)
+                }
+                next()
+            }
+            handler(resultHandler)
         }
     }
 
